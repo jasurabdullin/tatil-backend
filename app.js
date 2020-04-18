@@ -13,6 +13,13 @@ const db_link = process.env.DB_LINK
 
 app.use(bodyParser.json())
 
+app.use((request, response, next) => {
+    response.setHeader('Access-Control-Allow-Origin', '*')
+    response.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization')
+    response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE')
+    next()
+})
+
 app.use('/api/places', placesRoutes)
 app.use('/api/users', usersRoutes)
 

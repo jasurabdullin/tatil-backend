@@ -66,7 +66,7 @@ const login = async (request, response, next) => {
         return next(error)
     }
 
-    response.json({message: 'Logged in!'})
+    response.json({message: 'Logged in!', user: existingUser.toObject({getters: true})})
 
 }
 
