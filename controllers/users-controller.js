@@ -1,58 +1,72 @@
-const {v4: uuidv4 } = require('uuid')
 const {validationResult} = require('express-validator')
 
 const HTTPError = require('../models/http-error')
+const User = require('../models/user')
 
-const DUMMYUSERS = [
-    {
-        id: 'u1',
-        name: 'Jasur Abdullin',
-        email: 'test@test.com',
-        password: 'testing'
+
+const getUsers = async (request, response, next) => {
+    
+    let users
+    try {users = await User.find({}, '-password')} catch(err){
+        const error = new HTTPError('Fetching users failed! Please try again.', 500)
+        return next(error)
     }
-]
-
-
-const getUsers = (request, response, next) => {
-    response.json({users: DUMMYUSERS})
+    
+    response.json({users: users.map(user => user.toObject({ getters:true }))})
 }
 
-const signup = (request, response, next) => {
+const signup = async (request, response, next) => {
 
     const errors = validationResult(request)
     if(!errors.isEmpty()){
         console.log(errors)
-        throw new HTTPError('Invalid inputs', 422)
+        return next(new HTTPError('Invalid inputs', 422))
     }
 
     const {name, email, password} = request.body
 
-    const existingUser = DUMMYUSERS.find(u => u.email === email)
+    let existingUser
+    try {  existingUser = await User.findOne({ email: email }) } catch(err){
+        const error = new HTTPError('Sign up failed. Please try again!', 500)
+        return next(error)
+    }
 
-    if(existingUser){throw new HTTPError('Email already exists', 422)}
+    if(existingUser){
+        const error = new HTTPError('This email already exists. Please log in or sign up with a different email!', 422)
+        return next(error)
+    }
 
-    const createdUser = {
-        id: uuidv4(),
+    const createdUser = new User ({
         name,
         email,
-        password
+        image: 'https://avatars3.githubusercontent.com/u/51510943?s=460&u=83778a8abf884c8a5c336cd69f10085713944f19&v=4',
+        password,
+        places: []
+    })
+
+    try { await createdUser.save() } catch(err) {
+        const error = new HTTPError('Failed to create a new user!', 500)
+        return next(error)
     }
 
-    DUMMYUSERS.push(createdUser)
-
-    response.status(201).json({user: createdUser})
+    response.status(201).json({user: createdUser.toObject({ getters: true })})
 }
 
-const login = (request, response, next) => {
+const login = async (request, response, next) => {
     const {email, password} = request.body
 
-    const activeUser = DUMMYUSERS.find(u => u.email === email)
-
-    if(!activeUser || activeUser.password !== password){
-        throw new HTTPError('Could not identify user!', 401)
+    let existingUser
+    try {  existingUser = await User.findOne({ email: email }) } catch(err){
+        const error = new HTTPError('Login failed. Please try again!', 500)
+        return next(error)
     }
 
-    response.json({message: 'Logged in'})
+    if(!existingUser || existingUser.password !== password){
+        const error = new HTTPError('Invalid credentials! Please try logging in again.', 401)
+        return next(error)
+    }
+
+    response.json({message: 'Logged in!'})
 
 }
 

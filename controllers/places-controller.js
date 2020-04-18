@@ -1,44 +1,46 @@
-const {v4: uuidv4 } = require('uuid')
 const { validationResult } = require('express-validator')
+const mongoose = require('mongoose')
 
 const HTTPError = require('../models/http-error')
 const getCoordinates = require('../util/location')
+const Place = require('../models/place')
+const User = require('../models/user')
 
-let DUMMYPLACES = [
-    {
-        id: 'p1',
-        title: 'Empire State Building',
-        description: 'One of the most famous sky scrapers in the world',
-        address: '20 W 34th St, New York, NY 10001',
-        location: {
-            lat: 40.7484405,
-            lng: -73.9856644
-        },
-        creator: 'u1'
-    }
-]
 
-const getPlaceById = (request, response, next) => {
+const getPlaceById = async (request, response, next) => {
     const placeId = request.params.pid
-    const place = DUMMYPLACES.find(p => {return p.id === placeId})
+
+    let place
+    try{ place = await Place.findById(placeId)}
+        catch(err){
+            const error = new HTTPError('Something went wrong! Could not find a place.', 500)
+            return next(error)
+        }
 
     if(!place){
-        throw new HTTPError('Could not find place!', 404)
+        const error = new HTTPError('Could not find place!', 404)
+        return next(error)
     }
 
-    response.json({place})
+    response.json({place: place.toObject({getters: true})})
 }
 
-const getPlacesByUser = (request, response, next) => {
+const getPlacesByUser = async (request, response, next) => {
     const userId = request.params.uid
-    const places = DUMMYPLACES.filter(p => {return p.creator === userId})
 
-    if(!places || places.length === 0){
-        throw new HTTPError('Could not find places for this user!', 404)
+    let userPlaces
+    try{ userPlaces = await User.findById(userId).populate('places') }
+        catch(err){
+            const error = new HTTPError('Could not find user!', 500)
+            return next(error)
+        }
+
+    if(!userPlaces || userPlaces.places.length === 0){
+        const error = new HTTPError('Could not find places for this user!', 404)
+        return next(error)
     }
 
-
-    response.json({places})
+    response.json({places: userPlaces.places.map(place => place.toObject({getters: true}))})
 }
 
 const createPlace = async (request, response, next) => {
@@ -53,48 +55,102 @@ const createPlace = async (request, response, next) => {
     let coordinates
     try {coordinates = await getCoordinates(address)} catch(error){return next(error)}
 
-    const createdPlace = {
-        id: uuidv4(),
+    const createdPlace = new Place({
         title,
         description,
-        location: coordinates,
         address,
+        location: coordinates,
+        image: 'https://cdn.getyourguide.com/img/location_img-2608-1226636435-148.jpg',
         creator
+    })
+
+    let user
+
+    try{ user = await User.findById(creator) } catch (err) {
+        const error = new HTTPError('Failed to create a new place.', 500)
+        return next(error)
     }
 
-    DUMMYPLACES.push(createdPlace)
+    if(!user){
+        const error = new HTTPError('Could not find user!', 404)
+        return next(error)
+    }
+
+    try { 
+        const sess = await mongoose.startSession()
+        sess.startTransaction()
+        await createdPlace.save({session: sess})
+
+        user.places.push(createdPlace)
+        await user.save({session: sess})
+        await sess.commitTransaction()
+
+     } catch(err) {
+        const error = new HTTPError('Failed to create a new place', 500)
+        return next(error)
+    }
 
     response.status(201).json({place: createdPlace})
 }
 
-const updatePlace = (request, response, next) => {
+const updatePlace = async (request, response, next) => {
 
     const errors = validationResult(request)
     if(!errors.isEmpty()){
         console.log(errors)
-        throw new HTTPError('Invalid inputs', 422)
+        return next(new HTTPError('Invalid inputs', 422))
     }
 
     const { title, description } = request.body
     const placeId = request.params.pid
-    const updatedPlace = { ...DUMMYPLACES.find(p => p.id === placeId) }
-    const placeIndex = DUMMYPLACES.findIndex(p => p.id === placeId)
-    updatedPlace.title = title
-    updatedPlace.description = description
 
-    DUMMYPLACES[placeIndex] = updatedPlace
+    let place
+    try { place = await Place.findById(placeId)}
+        catch(err){
+            const error = new HTTPError('Something went wrong! Could not update place.', 500)
+            return next(error)
+        }
 
-    response.status(200).json({place: updatedPlace})
+    place.title = title
+    place.description = description
+
+    try { await place.save()}
+        catch(err){
+            const error = new HTTPError('Something went wrong! Could not update place.', 500)
+            return next(error)
+        }
+
+    response.status(200).json({place: place.toObject({getters: true})})
 }
 
-const deletePlace = (request, response, next) => {
+const deletePlace = async (request, response, next) => {
     const placeId = request.params.pid
 
-    if(!DUMMYPLACES.find(p => p.id === placeId)){
-        throw new HTTPError('Could not find place!', 404)
-    }
+    let place
 
-    DUMMYPLACES = DUMMYPLACES.filter(p => p.id !== placeId)
+    try { place = await Place.findById(placeId).populate('creator') } catch(err){
+        const error = new HTTPError('Something went wrong! Could not delete place.', 500)
+        return next(error)
+    }
+    
+    if(!place){
+        const error = HTTPError('Could not find place!', 404)
+        return next(error)
+    }
+    
+    try {
+        const session = await mongoose.startSession()
+        session.startTransaction()
+        await place.remove({session: session})
+
+        place.creator.places.pull(place)
+        await place.creator.save({session: session})
+        await session.commitTransaction()
+
+    } catch(err){
+        const error = new HTTPError('Something went wrong! Could not delete place.', 500)
+        return next(error)
+    }
 
     response.status(200).json({message: 'Deleted place!'})
 }
