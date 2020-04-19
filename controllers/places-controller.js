@@ -113,6 +113,11 @@ const updatePlace = async (request, response, next) => {
             return next(error)
         }
 
+    if(place.creator.toString() !== request.userData.userId){
+        const error = new HTTPError('You are not authorized to edit this place!', 401)
+        return next(error)
+    }
+
     place.title = title
     place.description = description
 
@@ -137,6 +142,11 @@ const deletePlace = async (request, response, next) => {
     
     if(!place){
         const error = HTTPError('Could not find place!', 404)
+        return next(error)
+    }
+
+    if(place.creator.id !== request.userData.userId){
+        const error = new HTTPError('You are not authorized to delete this place!', 403)
         return next(error)
     }
 

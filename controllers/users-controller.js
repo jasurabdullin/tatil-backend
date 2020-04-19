@@ -61,7 +61,7 @@ const signup = async (request, response, next) => {
     let token
     try {
         token = jwt.sign(
-            {userId: createdUser.id, email:createdUser.email}, 
+            {userId: createdUser.id, email: createdUser.email}, 
             'bingbingaslan', 
             {expiresIn: '1h'}
         )
@@ -70,7 +70,7 @@ const signup = async (request, response, next) => {
         return next(error)
     }
 
-    response.status(201).json({ user: createdUser.id, email: createdUser.email, token: token })
+    response.status(201).json({ userId: createdUser.id, email: createdUser.email, token: token })
 }
 
 const login = async (request, response, next) => {
@@ -83,7 +83,7 @@ const login = async (request, response, next) => {
     }
 
     if(!existingUser){
-        const error = new HTTPError('Invalid credentials! Please try logging in again.', 401)
+        const error = new HTTPError('Invalid credentials! Please try logging in again.', 403)
         return next(error)
     }
 
@@ -112,12 +112,9 @@ const login = async (request, response, next) => {
         return next(error)
     }
 
-    response.json({ user: existingUser.id, email: existingUser.email, token: token})
+    response.json({ userId: existingUser.id, email: existingUser.email, token: token})
 
 }
-
-
-
 
 
 exports.getUsers = getUsers

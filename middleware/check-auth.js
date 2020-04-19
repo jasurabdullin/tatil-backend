@@ -9,13 +9,14 @@ module.exports = (request, response, next) => {
     try {
         const token = request.headers.authorization.split(' ')[1] //Authorization: 'Bearer TOKEN'
         if(!token){
-            throw new Error('Authentication failed!')
+            const error = new HTTPError('Authentication failed!', 403)
+            return next(error)
         }
         const decodedToken = jwt.verify(token, 'bingbingaslan')
-        request.userData = {userId: decodedToken.userId}
+        request.userData = { userId: decodedToken.userId }
         next()
     } catch (err){
-        const error = new HTTPError('Authentication failed!', 401)
+        const error = new HTTPError('Authentication failed!', 403)
         return next(error)
     }
 }
