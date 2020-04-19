@@ -1,6 +1,5 @@
 const multer = require('multer')
-import {v1 as uuidv1 } from 'uuid'
-import { request } from 'express'
+const uuid = require('uuid/v1')
 
 const MIME_TYPE_MAP = {
     'image/png':'png',
@@ -10,14 +9,14 @@ const MIME_TYPE_MAP = {
 
 //creating a file uploading middleware
 const fileUpload = multer({
-    limits: 500000,
+    limits: 1000000,
     storage: multer.diskStorage({
         destination: (request, file, callback) => {
             callback(null,'uploads/images')
         },
         filename: (request, file, callback) => {
             const ext = MIME_TYPE_MAP[file.mimetype]
-            callback(null, uuidv1() + '.' + ext)
+            callback(null, uuid() + '.' + ext)
         }
     }),
     fileFilter: (request, file, callback) => {

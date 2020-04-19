@@ -1,3 +1,5 @@
+const fs = require('fs')
+const path = require('path')
 const express = require('express')
 const bodyParser = require('body-parser')
 const mongoose = require('mongoose')
@@ -12,6 +14,8 @@ const app = express()
 const db_link = process.env.DB_LINK
 
 app.use(bodyParser.json())
+
+app.use('/uploads/images', express.static(path.join('uploads', 'images')))
 
 app.use((request, response, next) => {
     response.setHeader('Access-Control-Allow-Origin', '*')
@@ -29,6 +33,9 @@ app.use((request, response, next) => {
 })
 
 app.use((error, request, response, next) => {
+    if(request.file){
+        fs.unlink(request.file.path, (error) => {return next(error)})
+    }
     if(response.headerSent){
         return next(error)
     }

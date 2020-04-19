@@ -1,4 +1,6 @@
 const {validationResult} = require('express-validator')
+const bcrypt = require('bcryptjs')
+const jwt = require('jsonwebtoken')
 
 const HTTPError = require('../models/http-error')
 const User = require('../models/user')
@@ -19,7 +21,6 @@ const signup = async (request, response, next) => {
 
     const errors = validationResult(request)
     if(!errors.isEmpty()){
-        console.log(errors)
         return next(new HTTPError('Invalid inputs', 422))
     }
 
@@ -36,11 +37,19 @@ const signup = async (request, response, next) => {
         return next(error)
     }
 
+    let hashedPassword
+    try {
+        hashedPassword = await bcrypt.hash(password, 12)
+    } catch(err){
+        const error = new HTTPError('Could not create user! Please try again.', 500)
+        return next(error)
+    }
+
     const createdUser = new User ({
         name,
         email,
-        image: 'https://avatars3.githubusercontent.com/u/51510943?s=460&u=83778a8abf884c8a5c336cd69f10085713944f19&v=4',
-        password,
+        image: request.file.path,
+        password: hashedPassword,
         places: []
     })
 
@@ -49,7 +58,19 @@ const signup = async (request, response, next) => {
         return next(error)
     }
 
-    response.status(201).json({user: createdUser.toObject({ getters: true })})
+    let token
+    try {
+        token = jwt.sign(
+            {userId: createdUser.id, email:createdUser.email}, 
+            'bingbingaslan', 
+            {expiresIn: '1h'}
+        )
+    } catch(err){
+        const error = new HTTPError('Failed to create a new user!', 500)
+        return next(error)
+    }
+
+    response.status(201).json({ user: createdUser.id, email: createdUser.email, token: token })
 }
 
 const login = async (request, response, next) => {
@@ -61,12 +82,37 @@ const login = async (request, response, next) => {
         return next(error)
     }
 
-    if(!existingUser || existingUser.password !== password){
+    if(!existingUser){
         const error = new HTTPError('Invalid credentials! Please try logging in again.', 401)
         return next(error)
     }
 
-    response.json({message: 'Logged in!', user: existingUser.toObject({getters: true})})
+    let isValidPassword = false
+    try {
+        isValidPassword = await bcrypt.compare(password, existingUser.password)
+    } catch(err){
+        const error = new HTTPError('Invalid credentials! Please try again.')
+        return next(error)
+    }
+
+    if(!isValidPassword){
+        const error = new HTTPError('Invalid credentials! Please try again.')
+        return next(error)
+    }
+
+    let token
+    try {
+        token = jwt.sign(
+            {userId: existingUser.id, email:existingUser.email}, 
+            'bingbingaslan', 
+            {expiresIn: '1h'}
+        )
+    } catch(err){
+        const error = new HTTPError('Login failed! Please try again.', 500)
+        return next(error)
+    }
+
+    response.json({ user: existingUser.id, email: existingUser.email, token: token})
 
 }
 
