@@ -63,7 +63,7 @@ const createPlace = async (request, response, next) => {
         address,
         location: coordinates,
         image: request.file.path,
-        creator
+        creator: request.userData.userId
     })
 
     let user
